@@ -5,6 +5,7 @@
 # The numbered squares count the adjacent mines
 import itertools
 import random
+import re
 from string import ascii_lowercase
 
 import pandas as pd
@@ -14,7 +15,7 @@ BLANK = ''
 HIDDEN = '-'
 
 
-class Board:
+class Minesweeper:
     MAX_ROWS = 30
     MAX_COLS = 24
     MAX_MINE_PCT = .9
@@ -22,9 +23,19 @@ class Board:
     LOSE_MSG = "Oh no, a mine! Game over!"
     PROG_MSG = "The game's still going!"
 
-    def __init__(self, rows, cols, pct_mines):
-        rows = min(rows, self.MAX_ROWS)
-        cols = min(cols, self.MAX_COLS)
+    def __init__(self):
+        print("Welcome to Minesweeper! Please specify the following:")
+        rows = min(
+            int(input(f"Number of rows (max {Minesweeper.MAX_ROWS}) > ")),
+            self.MAX_ROWS)
+        cols = min(
+            int(input(f"Number of cols (max {Minesweeper.MAX_COLS}) > ")),
+            self.MAX_COLS)
+        pct_mines = min(
+            float(input(
+                f"Percentage of tiles to have mines (between 0 and 1,"
+                f" max {Minesweeper.MAX_MINE_PCT}) > ")),
+            self.MAX_MINE_PCT)
 
         self.arr = pd.DataFrame(
             index=range(rows), columns=list(ascii_lowercase[:cols]),
@@ -37,7 +48,9 @@ class Board:
 
         self.populate(pct_mines)  # Generate mines and counts
 
-        self.played_this_round = []
+        self.already_revealed = []
+
+        self.play()
 
     def __str__(self):
         return str(self.mask)
@@ -45,7 +58,7 @@ class Board:
     def display(self):
         print(self.__str__())
 
-    def play(self, row_ix, col_ix):
+    def reveal(self, row_ix, col_ix):
         # Get underlying value of specified square and pin to mask
         val = self.arr.loc[row_ix, col_ix]
         self.mask.loc[row_ix, col_ix] = val
@@ -53,27 +66,41 @@ class Board:
             print(self.arr)
             self.game_over = True
             self.msg = self.LOSE_MSG
-        elif self.won:
-            print(self.arr)
-            self.game_over = True
-            self.msg = self.WIN_MSG
-
         # Propagate, automatically play adjacent blank squares
-        if val == BLANK:
+        elif val == BLANK:
             i = row_ix
             j = ascii_lowercase.index(col_ix)
-            self.played_this_round.append((i, j))
+            self.already_revealed.append((i, j))
             for ii, jj in itertools.product(
                     range(max(i, 1) - 1, i + 2),
                     range(max(j, 1) - 1, j + 2)):
-                if (ii, jj) in itertools.chain([(i, j)], self.played_this_round):
+                if (ii, jj) in self.already_revealed:
                     continue  # Current square, skip
                 try:
                     val = self.arr.iloc[ii, jj]
                     if val != MINE:
-                        self.play(ii, ascii_lowercase[jj])
+                        self.reveal(ii, ascii_lowercase[jj])
                 except IndexError:
                     continue
+        if self.won:
+            print(self.arr)
+            self.game_over = True
+            self.msg = self.WIN_MSG
+
+    def play(self):
+        while not self.game_over:
+            self.display()
+            print("Choose a square to reveal (i.e. '1a', 'j15', 'B4').")
+            sq = input('> ')
+            try:
+                letter = re.search(r'[A-z]+', sq).group(0).lower()
+                number = int(re.search(r'[0-9]+', sq).group(0))
+                self.reveal(number, letter)
+            except AttributeError as e:
+                if "has no attribute 'group'" not in str(e):
+                    raise
+                input("Invalid input.")
+        print(self.msg)
 
     def populate(self, pct_mines):
         # Calculate the number of mines to place
@@ -120,17 +147,4 @@ class Board:
 
 
 if __name__ == '__main__':
-    print(
-        "Welcome to Minesweeper! Please specify the following:")
-    nrows = int(input(f"Number of rows (max {Board.MAX_ROWS})"))
-    ncols = int(input(f"Number of cols (max {Board.MAX_COLS})"))
-    pct = float(input(
-        f"Percentage of tiles to have mines (between 0 and 1,"
-        f" max {Board.MAX_MINE_PCT}):"))
-    b = Board(nrows, ncols, pct)
-    while not b.game_over:
-        b.display()
-        print("Choose a square to reveal (i.e. '1a').")
-        sq = input('> ')
-        b.play(int(sq[0]), sq[1])
-    print(b.msg)
+    Minesweeper()
