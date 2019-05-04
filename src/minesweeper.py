@@ -26,15 +26,15 @@ class Minesweeper:
     def __init__(self):
         print("Welcome to Minesweeper! Please specify the following:")
         rows = min(
-            int(input(f"Number of rows (max {Minesweeper.MAX_ROWS}) > ")),
+            int(input(f"Number of rows (max {self.MAX_ROWS}) > ")),
             self.MAX_ROWS)
         cols = min(
-            int(input(f"Number of cols (max {Minesweeper.MAX_COLS}) > ")),
+            int(input(f"Number of cols (max {self.MAX_COLS}) > ")),
             self.MAX_COLS)
         pct_mines = min(
             float(input(
                 f"Percentage of tiles to have mines (between 0 and 1,"
-                f" max {Minesweeper.MAX_MINE_PCT}) > ")),
+                f" max {self.MAX_MINE_PCT}) > ")),
             self.MAX_MINE_PCT)
 
         self.arr = pd.DataFrame(
@@ -52,11 +52,8 @@ class Minesweeper:
 
         self.play()
 
-    def __str__(self):
-        return str(self.mask)
-
     def display(self):
-        print(self.__str__())
+        print(self.mask)
 
     def reveal(self, row_ix, col_ix):
         # Get underlying value of specified square and pin to mask
