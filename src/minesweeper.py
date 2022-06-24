@@ -1,8 +1,11 @@
-# Minesweeper
+"""Minesweeper
 
-# Board, max size 24 x 30
-# Each square can be a mine, a number, or blank
-# The numbered squares count the adjacent mines
+Board, max size 24 x 30
+Each square can be a mine, a number, or blank
+The numbered squares count the adjacent mines
+"""
+
+
 import itertools
 import random
 import re
@@ -10,15 +13,17 @@ from string import ascii_lowercase
 
 import pandas as pd
 
-MINE = 'X'
-BLANK = ''
-HIDDEN = '-'
+MINE = "X"
+BLANK = ""
+HIDDEN = "-"
 
 
 class Minesweeper:
+    """Minesweeper CLI class"""
+
     MAX_ROWS = 30
     MAX_COLS = 24
-    MAX_MINE_PCT = .9
+    MAX_MINE_PCT = 0.9
     WIN_MSG = "Congratulations!"
     LOSE_MSG = "Oh no, a mine! Game over!"
     PROG_MSG = "The game's still going!"
@@ -26,23 +31,27 @@ class Minesweeper:
     def __init__(self):
         print("Welcome to Minesweeper! Please specify the following:")
         rows = min(
-            int(input(f"Number of rows (max {self.MAX_ROWS}) > ")),
-            self.MAX_ROWS)
+            int(input(f"Number of rows (max {self.MAX_ROWS}) > ")), self.MAX_ROWS
+        )
         cols = min(
-            int(input(f"Number of cols (max {self.MAX_COLS}) > ")),
-            self.MAX_COLS)
+            int(input(f"Number of cols (max {self.MAX_COLS}) > ")), self.MAX_COLS
+        )
         pct_mines = min(
-            float(input(
-                f"Percentage of tiles to have mines (between 0 and 1,"
-                f" max {self.MAX_MINE_PCT}) > ")),
-            self.MAX_MINE_PCT)
+            float(
+                input(
+                    f"Percentage of tiles to have mines (between 0 and 1,"
+                    f" max {self.MAX_MINE_PCT}) > "
+                )
+            ),
+            self.MAX_MINE_PCT,
+        )
 
         self.arr = pd.DataFrame(
-            index=range(rows), columns=list(ascii_lowercase[:cols]),
-            data=BLANK)
+            index=range(rows), columns=list(ascii_lowercase[:cols]), data=BLANK
+        )
         self.mask = pd.DataFrame(
-            index=range(rows), columns=list(ascii_lowercase[:cols]),
-            data=HIDDEN)
+            index=range(rows), columns=list(ascii_lowercase[:cols]), data=HIDDEN
+        )
         self.game_over = False
         self.msg = self.PROG_MSG
 
@@ -53,9 +62,11 @@ class Minesweeper:
         self.play()
 
     def display(self):
+        """Show board status."""
         print(self.mask)
 
     def reveal(self, row_ix, col_ix):
+        """Reveal a location."""
         # Get underlying value of specified square and pin to mask
         val = self.arr.loc[row_ix, col_ix]
         self.mask.loc[row_ix, col_ix] = val
@@ -69,8 +80,8 @@ class Minesweeper:
             j = ascii_lowercase.index(col_ix)
             self.already_revealed.append((i, j))
             for ii, jj in itertools.product(
-                    range(max(i, 1) - 1, i + 2),
-                    range(max(j, 1) - 1, j + 2)):
+                range(max(i, 1) - 1, i + 2), range(max(j, 1) - 1, j + 2)
+            ):
                 if (ii, jj) in self.already_revealed:
                     continue  # Current square, skip
                 try:
@@ -85,13 +96,14 @@ class Minesweeper:
             self.msg = self.WIN_MSG
 
     def play(self):
+        """Game loop."""
         while not self.game_over:
             self.display()
             print("Choose a square to reveal (i.e. '1a', 'j15', 'B4').")
-            sq = input('> ')
+            sq = input("> ")
             try:
-                letter = re.search(r'[A-z]+', sq).group(0).lower()
-                number = int(re.search(r'[0-9]+', sq).group(0))
+                letter = re.search(r"[A-z]+", sq).group(0).lower()
+                number = int(re.search(r"[0-9]+", sq).group(0))
                 self.reveal(number, letter)
             except AttributeError as e:
                 if "has no attribute 'group'" not in str(e):
@@ -100,13 +112,14 @@ class Minesweeper:
         print(self.msg)
 
     def populate(self, pct_mines):
+        """Place mines on the board."""
         # Calculate the number of mines to place
         nrows = self.arr.shape[0]
         ncols = self.arr.shape[1]
         nmines = int(nrows * ncols * pct_mines)
 
         # Place mines
-        for mine in range(nmines):
+        for _ in range(nmines):
             while True:
                 i = random.choice(self.arr.index)
                 j = random.choice(self.arr.columns)
@@ -121,8 +134,9 @@ class Minesweeper:
                 continue
             adj_sqs = []
             for ii, jj in itertools.product(
-                    range(max(i-1, 0), min(i+2, nrows)),
-                    range(max(j-1, 0), min(j+2, nrows))):
+                range(max(i - 1, 0), min(i + 2, nrows)),
+                range(max(j - 1, 0), min(j + 2, nrows)),
+            ):
                 if i == ii and j == jj:
                     continue  # Current square, skip
                 try:
@@ -135,13 +149,14 @@ class Minesweeper:
 
     @property
     def won(self):
+        """Whether the game has been won."""
         # Check each square of the mask against the real board
         for i, j in itertools.product(self.arr.index, range(len(self.arr.columns))):
             real_val = self.arr.iloc[i, j]
-            if self.mask.iloc[i, j] != real_val and real_val != MINE:
+            if real_val not in (self.mask.iloc[i, j], MINE):
                 return False
         return True
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     Minesweeper()
