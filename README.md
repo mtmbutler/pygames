@@ -1,1 +1,1 @@
-py_minesweeper
+CLI games implented in Python.
