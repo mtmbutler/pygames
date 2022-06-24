@@ -127,6 +127,10 @@ class Player:
         """Give the player a card."""
         self.hand.add(card)
 
+    def play_first_card(self) -> Card:
+        """Plays the first card of the hand."""
+        return self.hand.cards.pop(0)
+
 
 def deal_to_players(deck: Deck, players: list[Player], hand_size: int) -> None:
     """Deals hand_size cards to each player from the deck.
@@ -151,7 +155,7 @@ def main(num_players: int) -> None:
     # discard_pile = Deck(cards=[])
     print(f"Made deck. Cards: {deck}")
 
-    # Make players
+    # Make players and deal cards
     players: list[Player] = []
     for i in range(num_players):
         players.append(Player(idno=i + 1, hand=CardCollection([])))
@@ -160,7 +164,27 @@ def main(num_players: int) -> None:
     for player in players:
         player.hand.sort()
         print(player)
-    print(f"Deck: {deck}")
+    print(f"Cards remaining in deck: {len(deck.cards)}")
+
+    # Game loop
+    active_player_ix = 0  # todo: start with 3 of clubs
+    while True:
+        # Each iteration is one player's turn
+        player = players[active_player_ix]
+
+        # Play a card
+        card = player.play_first_card()
+        print(f"Player {player.idno} plays {card}")
+
+        # Check if the player won
+        if not player.hand:
+            print(f"Player {player.idno} won!")
+            break
+
+        # Move to the next player
+        active_player_ix += 1
+        if active_player_ix >= len(players):
+            active_player_ix -= len(players)
 
 
 if __name__ == "__main__":
