@@ -28,7 +28,7 @@ class Minesweeper:
     LOSE_MSG = "Oh no, a mine! Game over!"
     PROG_MSG = "The game's still going!"
 
-    def __init__(self):
+    def __init__(self) -> None:
         print("Welcome to Minesweeper! Please specify the following:")
         rows = min(
             int(input(f"Number of rows (max {self.MAX_ROWS}) > ")), self.MAX_ROWS
@@ -57,15 +57,15 @@ class Minesweeper:
 
         self.populate(pct_mines)  # Generate mines and counts
 
-        self.already_revealed = []
+        self.already_revealed: list[tuple[int, int]] = []
 
         self.play()
 
-    def display(self):
+    def display(self) -> None:
         """Show board status."""
         print(self.mask)
 
-    def reveal(self, row_ix, col_ix):
+    def reveal(self, row_ix: int, col_ix: str) -> None:
         """Reveal a location."""
         # Get underlying value of specified square and pin to mask
         val = self.arr.loc[row_ix, col_ix]
@@ -95,15 +95,15 @@ class Minesweeper:
             self.game_over = True
             self.msg = self.WIN_MSG
 
-    def play(self):
+    def play(self) -> None:
         """Game loop."""
         while not self.game_over:
             self.display()
             print("Choose a square to reveal (i.e. '1a', 'j15', 'B4').")
             sq = input("> ")
             try:
-                letter = re.search(r"[A-z]+", sq).group(0).lower()
-                number = int(re.search(r"[0-9]+", sq).group(0))
+                letter = re.search(r"[A-z]+", sq).group(0).lower()  # type: ignore
+                number = int(re.search(r"[0-9]+", sq).group(0))  # type: ignore
                 self.reveal(number, letter)
             except AttributeError as e:
                 if "has no attribute 'group'" not in str(e):
@@ -111,7 +111,7 @@ class Minesweeper:
                 input("Invalid input.")
         print(self.msg)
 
-    def populate(self, pct_mines):
+    def populate(self, pct_mines: float) -> None:
         """Place mines on the board."""
         # Calculate the number of mines to place
         nrows = self.arr.shape[0]
@@ -148,7 +148,7 @@ class Minesweeper:
                 self.arr.iloc[i, j] = adj_mines
 
     @property
-    def won(self):
+    def won(self) -> bool:
         """Whether the game has been won."""
         # Check each square of the mask against the real board
         for i, j in itertools.product(self.arr.index, range(len(self.arr.columns))):

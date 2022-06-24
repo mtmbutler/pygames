@@ -1,6 +1,7 @@
 """Tic tac toe"""
 import re
 from string import ascii_lowercase
+from typing import Optional
 
 import pandas as pd
 
@@ -24,7 +25,7 @@ class TicTacToe:
         ("a3", "b2", "c1"),
     )
 
-    def __init__(self):
+    def __init__(self) -> None:
         print("Welcome to TicTacToe!")
         self.board = pd.DataFrame(
             index=range(1, 4), columns=list(ascii_lowercase[:3]), data=BLANK
@@ -34,15 +35,11 @@ class TicTacToe:
         self.next_char = "X"
         self.play()
 
-    def display(self):
+    def display(self) -> None:
         """Show current board state."""
         print(self.board)
 
-    def place(self, row_ix, col_ix):
-        """Place a character on the board."""
-        self.board.loc[row_ix, col_ix] = self.chars.pop()
-
-    def play(self):
+    def play(self) -> None:
         """Game loop."""
         while self.winner is None:
             self.display()
@@ -57,19 +54,24 @@ class TicTacToe:
         print(f"{self.winner} wins!")
 
     @staticmethod
-    def parse_coord(coord):  # pylint: disable=inconsistent-return-statements
+    def parse_coord(
+        coord: str,
+    ) -> tuple[int, str]:
         """Parse a coordinate from an input string."""
-        try:
-            letter = re.search(r"[A-z]+", coord).group(0).lower()
-            number = int(re.search(r"[0-9]+", coord).group(0))
-            return number, letter
-        except AttributeError as e:
-            if "has no attribute 'group'" not in str(e):
-                raise
-            input("Invalid input.")
+        match_letter = re.search(r"[A-z]+", coord)
+        if match_letter:
+            letter = match_letter.group(0).lower()
+        else:
+            raise Exception(f"No letter match found for input: {coord}")
+        match_number = re.search(r"[0-9]+", coord)
+        if match_number:
+            number = int(match_number.group(0))
+        else:
+            raise Exception(f"No number match found for input: {coord}")
+        return number, letter
 
     @property
-    def winner(self):
+    def winner(self) -> Optional[str]:
         """The winning player, if the board has a won position."""
         for line in self.lines:
             coords = [self.parse_coord(coord) for coord in line]
