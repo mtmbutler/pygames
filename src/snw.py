@@ -3,7 +3,7 @@
 import random
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import Any, Optional
 
 from fire import Fire
 
@@ -56,7 +56,7 @@ class Number(OrderedEnum):
     _2 = 15
 
 
-@dataclass(order=True)
+@dataclass
 class Card:
     """Card."""
 
@@ -65,6 +65,12 @@ class Card:
 
     def __str__(self) -> str:
         return f"{self.number.name[1:]}{SUIT_SYMBOLS[self.suit]}"
+
+    def __eq__(self, other: Any) -> Any:
+        return self.number == other.number
+
+    def __lt__(self, other: Any) -> Any:
+        return self.number < other.number
 
 
 @dataclass
@@ -127,9 +133,12 @@ class Player:
         """Give the player a card."""
         self.hand.add(card)
 
-    def play_first_card(self) -> Card:
-        """Plays the first card of the hand."""
-        return self.hand.cards.pop(0)
+    def play_lowest_card(self, on: Optional[Card] = None) -> Optional[Card]:
+        """Plays the lowest card that beats the provided card."""
+        for i, card in enumerate(self.hand.cards):
+            if not on or card > on:
+                return self.hand.cards.pop(i)
+        return None
 
 
 def deal_to_players(deck: Deck, players: list[Player], hand_size: int) -> None:
@@ -152,7 +161,6 @@ def main(num_players: int) -> None:
     """Main function."""
     # Make deck
     deck = Deck.full_shuffled_deck()
-    # discard_pile = Deck(cards=[])
     print(f"Made deck. Cards: {deck}")
 
     # Make players and deal cards
@@ -168,13 +176,23 @@ def main(num_players: int) -> None:
 
     # Game loop
     active_player_ix = 0  # todo: start with 3 of clubs
+    last_played_card: Optional[Card] = None
+    last_player_no_pass: Optional[Player] = None
     while True:
         # Each iteration is one player's turn
         player = players[active_player_ix]
+        if player is last_player_no_pass:
+            # If everyone passed and it's your turn again, clear the stack
+            last_played_card = None
 
         # Play a card
-        card = player.play_first_card()
-        print(f"Player {player.idno} plays {card}")
+        card = player.play_lowest_card(last_played_card)
+        if card:
+            print(f"Player {player.idno} plays {card}")
+            last_played_card = card
+            last_player_no_pass = player
+        else:
+            print(f"Player {player.idno} passes")
 
         # Check if the player won
         if not player.hand:
