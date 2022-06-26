@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
 
-echo "Running: isort"
-isort --quiet src
+echo "Running: isort" &
+isort --quiet src &
 
-echo "Running: black"
-black --quiet src
+echo "Running: black" &
+black --quiet src &
 
-echo "Running: flake8"
-flake8 src
+echo "Running: flake8" &
+flake8 src &
 
-echo "Running: mypy"
-mypy --no-error-summary --strict src
+echo "Running: mypy" &
+mypy --no-error-summary --strict src &
 
-echo "Running: pylint"
-pylint --score=n src
+echo "Running: pylint" &
+pylint --score=n src &
+wait
 
 # echo "Running: pytest/coverage"
 # coverage run -m pytest --quiet
