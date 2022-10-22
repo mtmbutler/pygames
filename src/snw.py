@@ -1,6 +1,7 @@
 """Scumbags and warlords."""
 
 import random
+import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Optional
@@ -56,6 +57,10 @@ class Number(OrderedEnum):
     _2 = 15
 
 
+class CardParseError(Exception):
+    """Error in parsing a card from a string."""
+
+
 @dataclass
 class Card:
     """Card."""
@@ -71,6 +76,26 @@ class Card:
 
     def __lt__(self, other: Any) -> Any:
         return self.number < other.number
+
+    def is_same(self, other: Any) -> Any:
+        return self.number == other.number and self.suit == other.suit
+
+    @classmethod
+    def from_str(cls, s: str) -> "Card":
+        """Try to parse a card from a string like "KS" for king of spades"""
+        try:
+            num, suit = s[:-1], s[-1]
+        except IndexError as e:
+            raise CardParseError(s) from e
+        try:
+            num_obj = getattr(Number, "_" + num.upper())
+        except AttributeError as e:
+            raise CardParseError(f"Couldn't parse card number from '{num}'") from e
+        try:
+            suit_obj = getattr(Suit, suit.upper())
+        except AttributeError as e:
+            raise CardParseError(f"Couldn't parse card suit from '{suit}'") from e
+        return cls(number=num_obj, suit=suit_obj)
 
 
 @dataclass
@@ -115,8 +140,9 @@ class Deck(CardCollection):
         for suit in Suit:
             for number in Number:
                 cards.append(Card(number, suit))
-        random.shuffle(cards)
-        return cls(cards=cards)
+        deck = cls(cards=cards)
+        deck.shuffle()
+        return deck
 
 
 @dataclass
@@ -181,7 +207,7 @@ def deal_to_players(deck: Deck, players: list[Player], hand_size: int) -> None:
         cards_dealt_to_each += 1
 
 
-def main(num_players: int) -> None:
+def main(num_players: int, be_player_one: bool = True) -> None:
     """Main function."""
     # Make deck
     deck = Deck.full_shuffled_deck()
@@ -203,14 +229,43 @@ def main(num_players: int) -> None:
     last_played_card: Optional[Card] = None
     last_player_no_pass: Optional[Player] = None
     while True:
+        time.sleep(0.3)
+
         # Each iteration is one player's turn
         player = players[active_player_ix]
         if player is last_player_no_pass:
             # If everyone passed and it's your turn again, clear the stack
             last_played_card = None
 
+        card: Optional[Card]
+        if active_player_ix == 0 and be_player_one:
+            while True:
+                print(f"Your turn.\n{player}")
+                card_input = input("Play which card? ")
+                if not card_input or card_input.lower() == "pass":
+                    card = None
+                    break
+                try:
+                    card = Card.from_str(card_input)
+                except CardParseError as e:
+                    print(f"Error parsing card: {e}")
+                    continue
+                if not any(card.is_same(c) for c in player.hand.cards):
+                    print(f"You don't have that card: {card}")
+                    continue
+                move = Move(card, last_played_card)
+                if not move.is_legal():
+                    print(f"Illegal move: {card}")
+                    continue
+                for i, c in enumerate(player.hand.cards):
+                    if c.is_same(card):
+                        player.hand.cards.pop(i)
+                        break
+                break
+        else:
+            card = player.play_lowest_card(last_played_card)
+
         # Play a card
-        card = player.play_lowest_card(last_played_card)
         if card:
             print(f"Player {player.idno} plays {card}")
             last_played_card = card
