@@ -120,6 +120,29 @@ class Deck(CardCollection):
 
 
 @dataclass
+class Move:
+    """A player move."""
+
+    card: Optional[Card]
+    on: Optional[Card]
+
+    @property
+    def is_pass(self) -> bool:
+        """Whether the move is a pass"""
+        return self.card is None
+
+    def is_legal(self) -> bool:
+        """Whether the move is legal"""
+        if self.is_pass:
+            # Always allowed to pass
+            return True
+        if self.on is None:
+            # Can play anything when starting
+            return True
+        return self.card > self.on
+
+
+@dataclass
 class Player:
     """Player."""
 
@@ -136,7 +159,8 @@ class Player:
     def play_lowest_card(self, on: Optional[Card] = None) -> Optional[Card]:
         """Plays the lowest card that beats the provided card."""
         for i, card in enumerate(self.hand.cards):
-            if not on or card > on:
+            move = Move(card=card, on=on)
+            if move.is_legal():
                 return self.hand.cards.pop(i)
         return None
 
