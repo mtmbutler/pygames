@@ -22,21 +22,20 @@ class OrderedEnum(Enum):
 class Suit(OrderedEnum):
     """Card suit."""
 
+    __symbols__ = {
+        "S": "♠",
+        "C": "♣",
+        "D": "♦",
+        "H": "♥",
+    }
+
     S = 4
     C = 3
     D = 2
     H = 1
 
-    def __hash__(self) -> int:
-        return hash(self.name)
-
-
-SUIT_SYMBOLS = {
-    Suit.S: "♠",
-    Suit.C: "♣",
-    Suit.D: "♦",
-    Suit.H: "♥",
-}
+    def __str__(self) -> str:
+        return self.__symbols__[self.name]
 
 
 class Number(OrderedEnum):
@@ -56,6 +55,9 @@ class Number(OrderedEnum):
     _A = 14
     _2 = 15
 
+    def __str__(self) -> str:
+        return self.name[1:]
+
 
 class CardParseError(Exception):
     """Error in parsing a card from a string."""
@@ -69,7 +71,7 @@ class Card:
     suit: Suit
 
     def __str__(self) -> str:
-        return f"{self.number.name[1:]}{SUIT_SYMBOLS[self.suit]}"
+        return f"{self.number}{self.suit}"
 
     def __eq__(self, other: Any) -> Any:
         return self.number == other.number
@@ -152,6 +154,9 @@ class Move:
 
     card: Optional[Card]
     on: Optional[Card]
+
+    def __str__(self) -> str:
+        return f"{self.card} on {self.on}"
 
     @property
     def is_pass(self) -> bool:
