@@ -78,6 +78,7 @@ class Card:
         return self.number < other.number
 
     def is_same(self, other: Any) -> Any:
+        """Whether two cards are the same"""
         return self.number == other.number and self.suit == other.suit
 
     @classmethod
@@ -168,6 +169,10 @@ class Move:
         return self.card > self.on
 
 
+class IllegalMoveException(Exception):
+    """Illegal move error"""
+
+
 @dataclass
 class Player:
     """Player."""
@@ -182,13 +187,33 @@ class Player:
         """Give the player a card."""
         self.hand.add(card)
 
-    def play_lowest_card(self, on: Optional[Card] = None) -> Optional[Card]:
+    def card_index(self, card: Card) -> int:
+        """The index in a player's hand of a particular card."""
+        for i, c in enumerate(self.hand.cards):
+            if c.is_same(card):
+                return i
+        raise ValueError(f"{card} is not in hand")
+
+    def play_move(self, move: Move) -> Optional[Card]:
+        """Plays a move and returns the associated card."""
+        if not move.is_legal():
+            raise IllegalMoveException(f"Illegal move: {move}")
+        if not move.card:
+            return None
+        try:  # Make sure the card is in their hand
+            ix = self.card_index(move.card)
+        except ValueError as e:
+            raise IllegalMoveException(f"Player doesn't have card {move.card}") from e
+        self.hand.cards.pop(ix)
+        return move.card
+
+    def play_lowest_card(self, on: Optional[Card] = None) -> Move:
         """Plays the lowest card that beats the provided card."""
-        for i, card in enumerate(self.hand.cards):
+        for card in self.hand.cards:
             move = Move(card=card, on=on)
             if move.is_legal():
-                return self.hand.cards.pop(i)
-        return None
+                return move
+        return Move(None, on)
 
 
 def deal_to_players(deck: Deck, players: list[Player], hand_size: int) -> None:
@@ -237,33 +262,29 @@ def main(num_players: int, be_player_one: bool = True) -> None:
             # If everyone passed and it's your turn again, clear the stack
             last_played_card = None
 
-        card: Optional[Card]
+        card: Optional[Card] = None
         if active_player_ix == 0 and be_player_one:
             while True:
                 print(f"Your turn.\n{player}")
                 card_input = input("Play which card? ")
                 if not card_input or card_input.lower() == "pass":
-                    card = None
+                    move = Move(None, last_played_card)
                     break
                 try:
                     card = Card.from_str(card_input)
                 except CardParseError as e:
                     print(f"Error parsing card: {e}")
                     continue
-                if not any(card.is_same(c) for c in player.hand.cards):
-                    print(f"You don't have that card: {card}")
-                    continue
                 move = Move(card, last_played_card)
-                if not move.is_legal():
-                    print(f"Illegal move: {card}")
+                try:
+                    card = player.play_move(move)
+                except IllegalMoveException as e:
+                    print(f"Illegal move error: {e}")
                     continue
-                for i, c in enumerate(player.hand.cards):
-                    if c.is_same(card):
-                        player.hand.cards.pop(i)
-                        break
                 break
         else:
-            card = player.play_lowest_card(last_played_card)
+            move = player.play_lowest_card(last_played_card)
+            card = player.play_move(move)
 
         # Play a card
         if card:
