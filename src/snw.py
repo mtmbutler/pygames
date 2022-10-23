@@ -232,7 +232,7 @@ def deal_to_players(deck: Deck, players: list[Player], hand_size: int) -> None:
         cards_dealt_to_each += 1
 
 
-def main(num_players: int, be_player_one: bool = True) -> None:
+def main(num_players: int, human_players: tuple[int, ...] = (0,)) -> None:
     """Main function."""
     # Make deck
     deck = Deck.full_shuffled_deck()
@@ -263,7 +263,7 @@ def main(num_players: int, be_player_one: bool = True) -> None:
             last_played_card = None
 
         card: Optional[Card] = None
-        if active_player_ix == 0 and be_player_one:
+        if active_player_ix in human_players:
             while True:
                 print(f"Your turn.\n{player}")
                 card_input = input("Play which card? ")
