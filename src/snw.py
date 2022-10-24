@@ -165,11 +165,13 @@ class Move:
     def __str__(self) -> str:
         return " ".join(str(c) for c in self.cards)
 
-    def is_legal(self) -> bool:
+    def is_legal(self, is_first_move: bool) -> bool:
         """Whether the move is legal"""
         if not self.cards:
             # Always allowed to pass
             return True
+        if is_first_move and not any(c.is_same(START_CARD) for c in self.cards):
+            return False
         values = [c.number.value for c in self.cards]
         if len(set(values)) > 1:
             # Can't play multiple values
@@ -193,6 +195,7 @@ class Player:
 
     idno: int
     hand: CardCollection
+    is_first_player: bool = False
 
     def __str__(self) -> str:
         return f"Player {self.idno} ({len(self.hand)})"
@@ -227,7 +230,7 @@ class Player:
             right = window_size
             while right <= len(self.hand.cards):
                 move = Move(cards=tuple(self.hand.cards[left:right]), on=on)
-                if move.is_legal():
+                if move.is_legal(is_first_move=self.is_first_player):
                     yield move
                 left += 1
                 right += 1
@@ -235,7 +238,7 @@ class Player:
 
     def play_move(self, move: Move) -> tuple[Card, ...]:
         """Plays a move and returns the associated card."""
-        if not move.is_legal():
+        if not move.is_legal(is_first_move=self.is_first_player):
             raise IllegalMoveException(f"Illegal move: {move}")
         if not move.cards:
             return ()
@@ -248,6 +251,8 @@ class Player:
             ixs.append(ix)
         for ix in sorted(ixs)[::-1]:
             self.hand.cards.pop(ix)
+        if self.is_first_player:
+            self.is_first_player = False
         return move.cards
 
     def play_lowest_card(self, on: tuple[Card, ...]) -> Move:
@@ -294,6 +299,7 @@ def main(num_players: int, human_players: tuple[int, ...] = (0,)) -> None:
     active_player_ix = 0
     for i, p in enumerate(players):
         if p.has_card(START_CARD):
+            p.is_first_player = True
             active_player_ix = i
             break
 
