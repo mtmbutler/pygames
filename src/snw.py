@@ -5,7 +5,7 @@ import random
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Iterator, Optional
 
 from fire import Fire
 
@@ -205,6 +205,23 @@ class Player:
                 return i
         raise ValueError(f"{card} is not in hand")
 
+    def legal_moves(self, on: tuple[Card, ...]) -> Iterator[Move]:
+        """All legal moves"""
+        if on:
+            window_sizes = [len(on)]
+        else:
+            window_sizes = [4, 3, 2, 1]
+        for window_size in window_sizes:
+            left = 0
+            right = window_size
+            while right <= len(self.hand.cards):
+                move = Move(cards=tuple(self.hand.cards[left:right]), on=on)
+                if move.is_legal():
+                    yield move
+                left += 1
+                right += 1
+        yield Move((), on)
+
     def play_move(self, move: Move) -> tuple[Card, ...]:
         """Plays a move and returns the associated card."""
         if not move.is_legal():
@@ -224,19 +241,8 @@ class Player:
 
     def play_lowest_card(self, on: tuple[Card, ...]) -> Move:
         """Plays the lowest card that beats the provided card."""
-        if on:
-            window_sizes = [len(on)]
-        else:
-            window_sizes = [4, 3, 2, 1]
-        for window_size in window_sizes:
-            left = 0
-            right = window_size
-            while right <= len(self.hand.cards):
-                move = Move(cards=tuple(self.hand.cards[left:right]), on=on)
-                if move.is_legal():
-                    return move
-                left += 1
-                right += 1
+        for move in self.legal_moves(on=on):
+            return move
         return Move((), on)
 
 
@@ -287,7 +293,12 @@ def main(num_players: int, human_players: tuple[int, ...] = (0,)) -> None:
             last_played_cards = ()
 
         cards: tuple[Card, ...] = ()
-        if active_player_ix in human_players:
+        legal_moves = list(player.legal_moves(on=last_played_cards))
+        if not legal_moves:
+            raise Exception(f"Player {player.idno} has no legal moves")
+        if len(legal_moves) == 1:
+            move = legal_moves[0]
+        elif active_player_ix in human_players:
             while True:
                 logger.info("Your turn.\n%s", player)
                 cards_input = input("Play which card? ")
