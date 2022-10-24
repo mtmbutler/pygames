@@ -1,5 +1,6 @@
 """Scumbags and warlords."""
 
+import logging
 import random
 import time
 from dataclasses import dataclass
@@ -7,6 +8,9 @@ from enum import Enum
 from typing import Any, Optional
 
 from fire import Fire
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 
 class OrderedEnum(Enum):
@@ -251,18 +255,18 @@ def main(num_players: int, human_players: tuple[int, ...] = (0,)) -> None:
     """Main function."""
     # Make deck
     deck = Deck.full_shuffled_deck()
-    print(f"Made deck. Cards: {deck}")
+    logger.info("Made deck. Cards: %s", deck)
 
     # Make players and deal cards
     players: list[Player] = []
     for i in range(num_players):
         players.append(Player(idno=i + 1, hand=CardCollection([])))
     deal_to_players(deck, players, -1)
-    print("Cards dealt.")
+    logger.info("Cards dealt.")
     for player in players:
         player.hand.sort()
-        print(player)
-    print(f"Cards remaining in deck: {len(deck.cards)}")
+        logger.info(player)
+    logger.info("Cards remaining in deck: %s", len(deck.cards))
 
     # Game loop
     active_player_ix = 0  # todo: start with 3 of clubs
@@ -280,7 +284,7 @@ def main(num_players: int, human_players: tuple[int, ...] = (0,)) -> None:
         cards: tuple[Card, ...] = ()
         if active_player_ix in human_players:
             while True:
-                print(f"Your turn.\n{player}")
+                logger.info("Your turn.\n%s", player)
                 cards_input = input("Play which card? ")
                 if not cards_input or cards_input.lower() == "pass":
                     move = Move((), last_played_cards)
@@ -290,13 +294,13 @@ def main(num_players: int, human_players: tuple[int, ...] = (0,)) -> None:
                     try:
                         card_list.append(Card.from_str(card_input))
                     except CardParseError as e:
-                        print(f"Error parsing card: {e}")
+                        logger.info("Error parsing card: %s", e)
                         continue
                 move = Move(tuple(card_list), last_played_cards)
                 try:
                     cards = player.play_move(move)
                 except IllegalMoveException as e:
-                    print(f"Illegal move error: {e}")
+                    logger.info("Illegal move error: %s", e)
                     continue
                 break
         else:
@@ -305,15 +309,15 @@ def main(num_players: int, human_players: tuple[int, ...] = (0,)) -> None:
 
         # Play a card
         if cards:
-            print(f"Player {player.idno} plays {move}")
+            logger.info("Player %s plays %s", player.idno, move)
             last_played_cards = cards
             last_player_no_pass = player
         else:
-            print(f"Player {player.idno} passes")
+            logger.info("Player %s passes", player.idno)
 
         # Check if the player won
         if not player.hand:
-            print(f"Player {player.idno} won!")
+            logger.info("Player %s won!", player.idno)
             break
 
         # Move to the next player
