@@ -163,7 +163,12 @@ class Move:
     on: tuple[Card, ...]
 
     def __str__(self) -> str:
+        if not self.cards:
+            return "pass"
         return " ".join(str(c) for c in self.cards)
+
+    def __bool__(self) -> bool:
+        return bool(self.cards)
 
     def is_legal(self, is_first_move: bool) -> bool:
         """Whether the move is legal"""
@@ -236,12 +241,10 @@ class Player:
                 right += 1
         yield Move((), on)
 
-    def play_move(self, move: Move) -> tuple[Card, ...]:
+    def play_move(self, move: Move) -> None:
         """Plays a move and returns the associated card."""
         if not move.is_legal(is_first_move=self.is_first_player):
             raise IllegalMoveException(f"Illegal move: {move}")
-        if not move.cards:
-            return ()
         ixs: list[int] = []
         for card in move.cards:
             try:  # Make sure the card is in their hand
@@ -253,7 +256,7 @@ class Player:
             self.hand.cards.pop(ix)
         if self.is_first_player:
             self.is_first_player = False
-        return move.cards
+        logger.info("%s plays: %s", self, move)
 
     def play_lowest_card(self, on: tuple[Card, ...]) -> Move:
         """Plays the lowest card that beats the provided card."""
@@ -334,7 +337,6 @@ def main(num_players: int, human_players: tuple[int, ...] = (0,)) -> None:
             # If everyone passed and it's your turn again, clear the stack
             last_played_cards = ()
 
-        cards: tuple[Card, ...] = ()
         legal_moves = list(player.legal_moves(on=last_played_cards))
         if not legal_moves:
             raise Exception(f"{player} has no legal moves")
@@ -344,15 +346,9 @@ def main(num_players: int, human_players: tuple[int, ...] = (0,)) -> None:
             move = player.play_from_input(last_played_cards)
         else:
             move = player.play_lowest_card(last_played_cards)
-        cards = player.play_move(move)
-
-        # Play a card
-        if cards:
-            logger.info("%s plays %s", player, move)
-            last_played_cards = cards
-            last_player_no_pass = player
-        else:
-            logger.info("%s passes", player)
+        player.play_move(move)
+        last_played_cards = move.cards or last_played_cards
+        last_player_no_pass = player if move else last_player_no_pass
 
         # Check if the player won
         if not player.hand:
