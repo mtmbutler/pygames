@@ -105,6 +105,9 @@ class Card:
         return cls(number=num_obj, suit=suit_obj)
 
 
+START_CARD = Card.from_str("3c")
+
+
 @dataclass
 class CardCollection:
     """Group of cards."""
@@ -205,6 +208,14 @@ class Player:
                 return i
         raise ValueError(f"{card} is not in hand")
 
+    def has_card(self, card: Card) -> bool:
+        """Whether a player has a particular card."""
+        try:
+            self.card_index(card)
+            return True
+        except ValueError:
+            return False
+
     def legal_moves(self, on: tuple[Card, ...]) -> Iterator[Move]:
         """All legal moves"""
         if on:
@@ -280,7 +291,12 @@ def main(num_players: int, human_players: tuple[int, ...] = (0,)) -> None:
     logger.info("Cards remaining in deck: %s", len(deck.cards))
 
     # Game loop
-    active_player_ix = 0  # todo: start with 3 of clubs
+    active_player_ix = 0
+    for i, p in enumerate(players):
+        if p.has_card(START_CARD):
+            active_player_ix = i
+            break
+
     last_played_cards: tuple[Card, ...] = ()
     last_player_no_pass: Optional[Player] = None
     while True:
