@@ -1,6 +1,7 @@
 """Scumbags and warlords."""
 
 import random
+import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Optional
@@ -56,6 +57,10 @@ class Number(OrderedEnum):
     _2 = 15
 
 
+class CardParseError(Exception):
+    """Error in parsing a card from a string."""
+
+
 @dataclass
 class Card:
     """Card."""
@@ -71,6 +76,27 @@ class Card:
 
     def __lt__(self, other: Any) -> Any:
         return self.number < other.number
+
+    def is_same(self, other: Any) -> Any:
+        """Whether two cards are the same"""
+        return self.number == other.number and self.suit == other.suit
+
+    @classmethod
+    def from_str(cls, s: str) -> "Card":
+        """Try to parse a card from a string like "KS" for king of spades"""
+        try:
+            num, suit = s[:-1], s[-1]
+        except IndexError as e:
+            raise CardParseError(s) from e
+        try:
+            num_obj = getattr(Number, "_" + num.upper())
+        except AttributeError as e:
+            raise CardParseError(f"Couldn't parse card number from '{num}'") from e
+        try:
+            suit_obj = getattr(Suit, suit.upper())
+        except AttributeError as e:
+            raise CardParseError(f"Couldn't parse card suit from '{suit}'") from e
+        return cls(number=num_obj, suit=suit_obj)
 
 
 @dataclass
@@ -115,8 +141,36 @@ class Deck(CardCollection):
         for suit in Suit:
             for number in Number:
                 cards.append(Card(number, suit))
-        random.shuffle(cards)
-        return cls(cards=cards)
+        deck = cls(cards=cards)
+        deck.shuffle()
+        return deck
+
+
+@dataclass
+class Move:
+    """A player move."""
+
+    card: Optional[Card]
+    on: Optional[Card]
+
+    @property
+    def is_pass(self) -> bool:
+        """Whether the move is a pass"""
+        return self.card is None
+
+    def is_legal(self) -> bool:
+        """Whether the move is legal"""
+        if self.is_pass:
+            # Always allowed to pass
+            return True
+        if self.on is None:
+            # Can play anything when starting
+            return True
+        return self.card > self.on
+
+
+class IllegalMoveException(Exception):
+    """Illegal move error"""
 
 
 @dataclass
@@ -133,12 +187,33 @@ class Player:
         """Give the player a card."""
         self.hand.add(card)
 
-    def play_lowest_card(self, on: Optional[Card] = None) -> Optional[Card]:
+    def card_index(self, card: Card) -> int:
+        """The index in a player's hand of a particular card."""
+        for i, c in enumerate(self.hand.cards):
+            if c.is_same(card):
+                return i
+        raise ValueError(f"{card} is not in hand")
+
+    def play_move(self, move: Move) -> Optional[Card]:
+        """Plays a move and returns the associated card."""
+        if not move.is_legal():
+            raise IllegalMoveException(f"Illegal move: {move}")
+        if not move.card:
+            return None
+        try:  # Make sure the card is in their hand
+            ix = self.card_index(move.card)
+        except ValueError as e:
+            raise IllegalMoveException(f"Player doesn't have card {move.card}") from e
+        self.hand.cards.pop(ix)
+        return move.card
+
+    def play_lowest_card(self, on: Optional[Card] = None) -> Move:
         """Plays the lowest card that beats the provided card."""
-        for i, card in enumerate(self.hand.cards):
-            if not on or card > on:
-                return self.hand.cards.pop(i)
-        return None
+        for card in self.hand.cards:
+            move = Move(card=card, on=on)
+            if move.is_legal():
+                return move
+        return Move(None, on)
 
 
 def deal_to_players(deck: Deck, players: list[Player], hand_size: int) -> None:
@@ -157,7 +232,7 @@ def deal_to_players(deck: Deck, players: list[Player], hand_size: int) -> None:
         cards_dealt_to_each += 1
 
 
-def main(num_players: int) -> None:
+def main(num_players: int, human_players: tuple[int, ...] = (0,)) -> None:
     """Main function."""
     # Make deck
     deck = Deck.full_shuffled_deck()
@@ -179,14 +254,39 @@ def main(num_players: int) -> None:
     last_played_card: Optional[Card] = None
     last_player_no_pass: Optional[Player] = None
     while True:
+        time.sleep(0.3)
+
         # Each iteration is one player's turn
         player = players[active_player_ix]
         if player is last_player_no_pass:
             # If everyone passed and it's your turn again, clear the stack
             last_played_card = None
 
+        card: Optional[Card] = None
+        if active_player_ix in human_players:
+            while True:
+                print(f"Your turn.\n{player}")
+                card_input = input("Play which card? ")
+                if not card_input or card_input.lower() == "pass":
+                    move = Move(None, last_played_card)
+                    break
+                try:
+                    card = Card.from_str(card_input)
+                except CardParseError as e:
+                    print(f"Error parsing card: {e}")
+                    continue
+                move = Move(card, last_played_card)
+                try:
+                    card = player.play_move(move)
+                except IllegalMoveException as e:
+                    print(f"Illegal move error: {e}")
+                    continue
+                break
+        else:
+            move = player.play_lowest_card(last_played_card)
+            card = player.play_move(move)
+
         # Play a card
-        card = player.play_lowest_card(last_played_card)
         if card:
             print(f"Player {player.idno} plays {card}")
             last_played_card = card
