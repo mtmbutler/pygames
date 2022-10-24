@@ -218,20 +218,25 @@ class Player:
             except ValueError as e:
                 raise IllegalMoveException(f"Player doesn't have card {card}") from e
             ixs.append(ix)
-        for ix in ixs:
+        for ix in sorted(ixs)[::-1]:
             self.hand.cards.pop(ix)
         return move.cards
 
     def play_lowest_card(self, on: tuple[Card, ...]) -> Move:
         """Plays the lowest card that beats the provided card."""
-        left = 0
-        right = max(len(on), 1)
-        while right <= len(self.hand.cards):
-            move = Move(cards=tuple(self.hand.cards[left:right]), on=on)
-            if move.is_legal():
-                return move
-            left += 1
-            right += 1
+        if on:
+            window_sizes = [len(on)]
+        else:
+            window_sizes = [4, 3, 2, 1]
+        for window_size in window_sizes:
+            left = 0
+            right = window_size
+            while right <= len(self.hand.cards):
+                move = Move(cards=tuple(self.hand.cards[left:right]), on=on)
+                if move.is_legal():
+                    return move
+                left += 1
+                right += 1
         return Move((), on)
 
 
