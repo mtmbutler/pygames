@@ -261,6 +261,26 @@ class Player:
             return move
         return Move((), on)
 
+    def play_from_input(self, on: tuple[Card, ...]) -> Move:
+        """Play a move specified by user input."""
+        while True:
+            logger.info("Your turn.\n%s", self.hand)
+            cards_input = input("Play which card? ")
+            if not cards_input or cards_input.lower() == "pass":
+                return Move((), on)
+            card_list: list[Card] = []
+            for card_input in cards_input.split(" "):
+                try:
+                    card_list.append(Card.from_str(card_input))
+                except CardParseError as e:
+                    logger.info("Error parsing card: %s", e)
+                    continue
+            move = Move(tuple(card_list), on)
+            if not move.is_legal(is_first_move=self.is_first_player):
+                logger.info("Illegal move")
+                continue
+            return move
+
 
 def deal_to_players(deck: Deck, players: list[Player], hand_size: int) -> None:
     """Deals hand_size cards to each player from the deck.
@@ -321,29 +341,10 @@ def main(num_players: int, human_players: tuple[int, ...] = (0,)) -> None:
         if len(legal_moves) == 1:
             move = legal_moves[0]
         elif active_player_ix in human_players:
-            while True:
-                logger.info("Your turn.\n%s", player.hand)
-                cards_input = input("Play which card? ")
-                if not cards_input or cards_input.lower() == "pass":
-                    move = Move((), last_played_cards)
-                    break
-                card_list: list[Card] = []
-                for card_input in cards_input.split(" "):
-                    try:
-                        card_list.append(Card.from_str(card_input))
-                    except CardParseError as e:
-                        logger.info("Error parsing card: %s", e)
-                        continue
-                move = Move(tuple(card_list), last_played_cards)
-                try:
-                    cards = player.play_move(move)
-                except IllegalMoveException as e:
-                    logger.info("Illegal move error: %s", e)
-                    continue
-                break
+            move = player.play_from_input(last_played_cards)
         else:
             move = player.play_lowest_card(last_played_cards)
-            cards = player.play_move(move)
+        cards = player.play_move(move)
 
         # Play a card
         if cards:
