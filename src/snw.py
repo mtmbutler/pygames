@@ -192,7 +192,7 @@ class Player:
     hand: CardCollection
 
     def __str__(self) -> str:
-        return f"{self.idno}: {self.hand}"
+        return f"Player {self.idno} ({len(self.hand)})"
 
     def deal(self, card: Card) -> None:
         """Give the player a card."""
@@ -295,12 +295,12 @@ def main(num_players: int, human_players: tuple[int, ...] = (0,)) -> None:
         cards: tuple[Card, ...] = ()
         legal_moves = list(player.legal_moves(on=last_played_cards))
         if not legal_moves:
-            raise Exception(f"Player {player.idno} has no legal moves")
+            raise Exception(f"{player} has no legal moves")
         if len(legal_moves) == 1:
             move = legal_moves[0]
         elif active_player_ix in human_players:
             while True:
-                logger.info("Your turn.\n%s", player)
+                logger.info("Your turn.\n%s", player.hand)
                 cards_input = input("Play which card? ")
                 if not cards_input or cards_input.lower() == "pass":
                     move = Move((), last_played_cards)
@@ -325,15 +325,18 @@ def main(num_players: int, human_players: tuple[int, ...] = (0,)) -> None:
 
         # Play a card
         if cards:
-            logger.info("Player %s plays %s", player.idno, move)
+            logger.info("%s plays %s", player, move)
             last_played_cards = cards
             last_player_no_pass = player
         else:
-            logger.info("Player %s passes", player.idno)
+            logger.info("%s passes", player)
 
         # Check if the player won
         if not player.hand:
-            logger.info("Player %s won!", player.idno)
+            logger.info("%s won!", player)
+            logger.info("Final hands:")
+            for p in players:
+                logger.info("%s: %s", p, p.hand)
             break
 
         # Move to the next player
