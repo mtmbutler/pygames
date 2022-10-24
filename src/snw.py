@@ -1,5 +1,6 @@
 """Scumbags and warlords."""
 
+import logging
 import random
 import time
 from dataclasses import dataclass
@@ -7,6 +8,9 @@ from enum import Enum
 from typing import Any, Optional
 
 from fire import Fire
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 
 class OrderedEnum(Enum):
@@ -22,21 +26,20 @@ class OrderedEnum(Enum):
 class Suit(OrderedEnum):
     """Card suit."""
 
+    __symbols__ = {
+        "S": "♠",
+        "C": "♣",
+        "D": "♦",
+        "H": "♥",
+    }
+
     S = 4
     C = 3
     D = 2
     H = 1
 
-    def __hash__(self) -> int:
-        return hash(self.name)
-
-
-SUIT_SYMBOLS = {
-    Suit.S: "♠",
-    Suit.C: "♣",
-    Suit.D: "♦",
-    Suit.H: "♥",
-}
+    def __str__(self) -> str:
+        return self.__symbols__[self.name]
 
 
 class Number(OrderedEnum):
@@ -56,6 +59,9 @@ class Number(OrderedEnum):
     _A = 14
     _2 = 15
 
+    def __str__(self) -> str:
+        return self.name[1:]
+
 
 class CardParseError(Exception):
     """Error in parsing a card from a string."""
@@ -69,7 +75,7 @@ class Card:
     suit: Suit
 
     def __str__(self) -> str:
-        return f"{self.number.name[1:]}{SUIT_SYMBOLS[self.suit]}"
+        return f"{self.number}{self.suit}"
 
     def __eq__(self, other: Any) -> Any:
         return self.number == other.number
@@ -150,23 +156,28 @@ class Deck(CardCollection):
 class Move:
     """A player move."""
 
-    card: Optional[Card]
-    on: Optional[Card]
+    cards: tuple[Card, ...]
+    on: tuple[Card, ...]
 
-    @property
-    def is_pass(self) -> bool:
-        """Whether the move is a pass"""
-        return self.card is None
+    def __str__(self) -> str:
+        return " ".join(str(c) for c in self.cards)
 
     def is_legal(self) -> bool:
         """Whether the move is legal"""
-        if self.is_pass:
+        if not self.cards:
             # Always allowed to pass
             return True
-        if self.on is None:
+        values = [c.number.value for c in self.cards]
+        if len(set(values)) > 1:
+            # Can't play multiple values
+            return False
+        if not self.on:
             # Can play anything when starting
             return True
-        return self.card > self.on
+        if len(self.cards) != len(self.on):
+            return False
+        on_value = max(c.number.value for c in self.on)
+        return values[0] > on_value
 
 
 class IllegalMoveException(Exception):
@@ -194,26 +205,39 @@ class Player:
                 return i
         raise ValueError(f"{card} is not in hand")
 
-    def play_move(self, move: Move) -> Optional[Card]:
+    def play_move(self, move: Move) -> tuple[Card, ...]:
         """Plays a move and returns the associated card."""
         if not move.is_legal():
             raise IllegalMoveException(f"Illegal move: {move}")
-        if not move.card:
-            return None
-        try:  # Make sure the card is in their hand
-            ix = self.card_index(move.card)
-        except ValueError as e:
-            raise IllegalMoveException(f"Player doesn't have card {move.card}") from e
-        self.hand.cards.pop(ix)
-        return move.card
+        if not move.cards:
+            return ()
+        ixs: list[int] = []
+        for card in move.cards:
+            try:  # Make sure the card is in their hand
+                ix = self.card_index(card)
+            except ValueError as e:
+                raise IllegalMoveException(f"Player doesn't have card {card}") from e
+            ixs.append(ix)
+        for ix in sorted(ixs)[::-1]:
+            self.hand.cards.pop(ix)
+        return move.cards
 
-    def play_lowest_card(self, on: Optional[Card] = None) -> Move:
+    def play_lowest_card(self, on: tuple[Card, ...]) -> Move:
         """Plays the lowest card that beats the provided card."""
-        for card in self.hand.cards:
-            move = Move(card=card, on=on)
-            if move.is_legal():
-                return move
-        return Move(None, on)
+        if on:
+            window_sizes = [len(on)]
+        else:
+            window_sizes = [4, 3, 2, 1]
+        for window_size in window_sizes:
+            left = 0
+            right = window_size
+            while right <= len(self.hand.cards):
+                move = Move(cards=tuple(self.hand.cards[left:right]), on=on)
+                if move.is_legal():
+                    return move
+                left += 1
+                right += 1
+        return Move((), on)
 
 
 def deal_to_players(deck: Deck, players: list[Player], hand_size: int) -> None:
@@ -236,22 +260,22 @@ def main(num_players: int, human_players: tuple[int, ...] = (0,)) -> None:
     """Main function."""
     # Make deck
     deck = Deck.full_shuffled_deck()
-    print(f"Made deck. Cards: {deck}")
+    logger.info("Made deck. Cards: %s", deck)
 
     # Make players and deal cards
     players: list[Player] = []
     for i in range(num_players):
         players.append(Player(idno=i + 1, hand=CardCollection([])))
     deal_to_players(deck, players, -1)
-    print("Cards dealt.")
+    logger.info("Cards dealt.")
     for player in players:
         player.hand.sort()
-        print(player)
-    print(f"Cards remaining in deck: {len(deck.cards)}")
+        logger.info(player)
+    logger.info("Cards remaining in deck: %s", len(deck.cards))
 
     # Game loop
     active_player_ix = 0  # todo: start with 3 of clubs
-    last_played_card: Optional[Card] = None
+    last_played_cards: tuple[Card, ...] = ()
     last_player_no_pass: Optional[Player] = None
     while True:
         time.sleep(0.3)
@@ -260,43 +284,45 @@ def main(num_players: int, human_players: tuple[int, ...] = (0,)) -> None:
         player = players[active_player_ix]
         if player is last_player_no_pass:
             # If everyone passed and it's your turn again, clear the stack
-            last_played_card = None
+            last_played_cards = ()
 
-        card: Optional[Card] = None
+        cards: tuple[Card, ...] = ()
         if active_player_ix in human_players:
             while True:
-                print(f"Your turn.\n{player}")
-                card_input = input("Play which card? ")
-                if not card_input or card_input.lower() == "pass":
-                    move = Move(None, last_played_card)
+                logger.info("Your turn.\n%s", player)
+                cards_input = input("Play which card? ")
+                if not cards_input or cards_input.lower() == "pass":
+                    move = Move((), last_played_cards)
                     break
+                card_list: list[Card] = []
+                for card_input in cards_input.split(" "):
+                    try:
+                        card_list.append(Card.from_str(card_input))
+                    except CardParseError as e:
+                        logger.info("Error parsing card: %s", e)
+                        continue
+                move = Move(tuple(card_list), last_played_cards)
                 try:
-                    card = Card.from_str(card_input)
-                except CardParseError as e:
-                    print(f"Error parsing card: {e}")
-                    continue
-                move = Move(card, last_played_card)
-                try:
-                    card = player.play_move(move)
+                    cards = player.play_move(move)
                 except IllegalMoveException as e:
-                    print(f"Illegal move error: {e}")
+                    logger.info("Illegal move error: %s", e)
                     continue
                 break
         else:
-            move = player.play_lowest_card(last_played_card)
-            card = player.play_move(move)
+            move = player.play_lowest_card(last_played_cards)
+            cards = player.play_move(move)
 
         # Play a card
-        if card:
-            print(f"Player {player.idno} plays {card}")
-            last_played_card = card
+        if cards:
+            logger.info("Player %s plays %s", player.idno, move)
+            last_played_cards = cards
             last_player_no_pass = player
         else:
-            print(f"Player {player.idno} passes")
+            logger.info("Player %s passes", player.idno)
 
         # Check if the player won
         if not player.hand:
-            print(f"Player {player.idno} won!")
+            logger.info("Player %s won!", player.idno)
             break
 
         # Move to the next player
