@@ -301,67 +301,81 @@ def deal_to_players(deck: Deck, players: list[Player], hand_size: int) -> None:
         cards_dealt_to_each += 1
 
 
+class Game:
+    """A game of scumbags and warlords."""
+
+    def __init__(self, num_players: int, human_players: tuple[int, ...] = (0,)):
+        self.num_players = num_players
+        self.human_players = human_players
+
+        # Make deck
+        self.deck = Deck.full_shuffled_deck()
+        logger.info("Made deck. Cards: %s", self.deck)
+
+        # Make players and deal cards
+        self.players: list[Player] = []
+        for i in range(num_players):
+            self.players.append(Player(idno=i + 1, hand=CardCollection([])))
+        deal_to_players(self.deck, self.players, -1)
+        logger.info("Cards dealt.")
+        for player in self.players:
+            player.hand.sort()
+            logger.info(player)
+        logger.info("Cards remaining in deck: %s", len(self.deck.cards))
+
+        # Determine first player
+        self.active_player_ix = 0
+        for i, p in enumerate(self.players):
+            if p.has_card(START_CARD):
+                p.is_first_player = True
+                self.active_player_ix = i
+                break
+
+    def start(self) -> None:
+        """Start the game loop."""
+        last_played_cards: tuple[Card, ...] = ()
+        last_player_no_pass: Optional[Player] = None
+        while True:
+            time.sleep(0.3)
+
+            # Each iteration is one player's turn
+            player = self.players[self.active_player_ix]
+            if player is last_player_no_pass:
+                # If everyone passed and it's your turn again, clear the stack
+                last_played_cards = ()
+
+            legal_moves = list(player.legal_moves(on=last_played_cards))
+            if not legal_moves:
+                raise Exception(f"{player} has no legal moves")
+            if len(legal_moves) == 1:
+                move = legal_moves[0]
+            elif self.active_player_ix in self.human_players:
+                move = player.play_from_input(last_played_cards)
+            else:
+                move = player.play_lowest_card(last_played_cards)
+            player.play_move(move)
+            last_played_cards = move.cards or last_played_cards
+            last_player_no_pass = player if move else last_player_no_pass
+
+            # Check if the player won
+            if not player.hand:
+                logger.info("%s won!", player)
+                logger.info("Final hands:")
+                for p in self.players:
+                    logger.info("%s: %s", p, p.hand)
+                break
+
+            # Move to the next player
+            self.active_player_ix += 1
+            if self.active_player_ix >= len(self.players):
+                self.active_player_ix -= len(self.players)
+
+
 def main(num_players: int, human_players: tuple[int, ...] = (0,)) -> None:
     """Main function."""
-    # Make deck
-    deck = Deck.full_shuffled_deck()
-    logger.info("Made deck. Cards: %s", deck)
 
-    # Make players and deal cards
-    players: list[Player] = []
-    for i in range(num_players):
-        players.append(Player(idno=i + 1, hand=CardCollection([])))
-    deal_to_players(deck, players, -1)
-    logger.info("Cards dealt.")
-    for player in players:
-        player.hand.sort()
-        logger.info(player)
-    logger.info("Cards remaining in deck: %s", len(deck.cards))
-
-    # Game loop
-    active_player_ix = 0
-    for i, p in enumerate(players):
-        if p.has_card(START_CARD):
-            p.is_first_player = True
-            active_player_ix = i
-            break
-
-    last_played_cards: tuple[Card, ...] = ()
-    last_player_no_pass: Optional[Player] = None
-    while True:
-        time.sleep(0.3)
-
-        # Each iteration is one player's turn
-        player = players[active_player_ix]
-        if player is last_player_no_pass:
-            # If everyone passed and it's your turn again, clear the stack
-            last_played_cards = ()
-
-        legal_moves = list(player.legal_moves(on=last_played_cards))
-        if not legal_moves:
-            raise Exception(f"{player} has no legal moves")
-        if len(legal_moves) == 1:
-            move = legal_moves[0]
-        elif active_player_ix in human_players:
-            move = player.play_from_input(last_played_cards)
-        else:
-            move = player.play_lowest_card(last_played_cards)
-        player.play_move(move)
-        last_played_cards = move.cards or last_played_cards
-        last_player_no_pass = player if move else last_player_no_pass
-
-        # Check if the player won
-        if not player.hand:
-            logger.info("%s won!", player)
-            logger.info("Final hands:")
-            for p in players:
-                logger.info("%s: %s", p, p.hand)
-            break
-
-        # Move to the next player
-        active_player_ix += 1
-        if active_player_ix >= len(players):
-            active_player_ix -= len(players)
+    g = Game(num_players, human_players)
+    g.start()
 
 
 if __name__ == "__main__":
