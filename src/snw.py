@@ -63,6 +63,9 @@ class Number(OrderedEnum):
     def __str__(self) -> str:
         return self.name[1:]
 
+    def __hash__(self) -> int:
+        return self.value
+
 
 @dataclass
 class Card:
@@ -94,6 +97,15 @@ class CardCollection(list[Card]):
     def __str__(self) -> str:
         return " ".join(str(c) for c in self)
 
+    def counter(self) -> dict[Number, int]:
+        """Counter, keyed by card number."""
+        counter: dict[Number, int] = {}
+        for card in self:
+            if card.number not in counter:
+                counter[card.number] = 0
+            counter[card.number] += 1
+        return counter
+
 
 class Deck(CardCollection):
     """Deck of cards."""
@@ -124,6 +136,21 @@ class Move:
     def __bool__(self) -> bool:
         return bool(self.cards)
 
+    @property
+    def count(self) -> int:
+        """Card count"""
+        return len(self.cards)
+
+    @property
+    def cardinality(self) -> Number:
+        """Cardinality of card value."""
+        c = self.counter()
+        if not c:
+            raise ValueError("Pass has no cardinality")
+        if len(c) > 1:
+            raise ValueError("Move has multiple card values")
+        return list(c)[0]
+
     def is_legal(self, is_first_move: bool) -> bool:
         """Whether the move is legal"""
         if not self.cards and not is_first_move:
@@ -131,8 +158,9 @@ class Move:
             return True
         if is_first_move and not any(c.is_same(START_CARD) for c in self.cards):
             return False
-        values = [c.number.value for c in self.cards]
-        if len(set(values)) > 1:
+        try:
+            cardinality = self.cardinality
+        except ValueError:
             # Can't play multiple values
             return False
         if not self.on:
@@ -140,8 +168,12 @@ class Move:
             return True
         if len(self.cards) != len(self.on):
             return False
-        on_value = max(c.number.value for c in self.on)
-        return values[0] > on_value
+        on_value = max(c.number for c in self.on)
+        return cardinality > on_value
+
+    def counter(self) -> dict[Number, int]:
+        """Card number counter. Example: {Number._5: 3} means three 5's."""
+        return CardCollection(self.cards).counter()
 
 
 class IllegalMoveException(Exception):
@@ -180,6 +212,9 @@ class Player:
 
     def legal_moves(self, on: tuple[Card, ...]) -> Iterator[Move]:
         """All legal moves"""
+        # Keep track of plays and don't yield redundant moves, e.g. 4c and 4s when
+        # we've already yielded 4c and 4h
+        redundancy_checker: set[tuple[int, Number]] = set()
         if on:
             yield Move((), on)  # Can always pass
             window_sizes = [len(on)]
@@ -191,7 +226,10 @@ class Player:
             while right <= len(self.hand):
                 move = Move(cards=tuple(self.hand[left:right]), on=on)
                 if move.is_legal(is_first_move=self.is_first_player):
-                    yield move
+                    redundancy_class = (move.count, move.cardinality)
+                    if redundancy_class not in redundancy_checker:
+                        redundancy_checker.add(redundancy_class)
+                        yield move
                 left += 1
                 right += 1
 
