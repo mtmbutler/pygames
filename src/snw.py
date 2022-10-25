@@ -108,36 +108,11 @@ class Card:
 START_CARD = Card.from_str("3c")
 
 
-@dataclass
-class CardCollection:
+class CardCollection(list[Card]):
     """Group of cards."""
 
-    cards: list[Card]
-
     def __str__(self) -> str:
-        return " ".join(str(c) for c in self.cards)
-
-    def __len__(self) -> int:
-        return len(self.cards)
-
-    def __bool__(self) -> bool:
-        return bool(self.cards)
-
-    def shuffle(self) -> None:
-        """Shuffles cards in place."""
-        random.shuffle(self.cards)
-
-    def sort(self) -> None:
-        """Sorts cards lowest to highest."""
-        self.cards = sorted(self.cards)
-
-    def add(self, card: Card) -> None:
-        """Add card to top."""
-        self.cards.append(card)
-
-    def draw(self) -> Card:
-        """Draw the top card."""
-        return self.cards.pop()
+        return " ".join(str(c) for c in self)
 
 
 class Deck(CardCollection):
@@ -146,12 +121,11 @@ class Deck(CardCollection):
     @classmethod
     def full_shuffled_deck(cls) -> "Deck":
         """Generates a full, shuffled deck."""
-        cards: list[Card] = []
+        deck = cls()
         for suit in Suit:
             for number in Number:
-                cards.append(Card(number, suit))
-        deck = cls(cards=cards)
-        deck.shuffle()
+                deck.append(Card(number, suit))
+        random.shuffle(deck)
         return deck
 
 
@@ -207,11 +181,11 @@ class Player:
 
     def deal(self, card: Card) -> None:
         """Give the player a card."""
-        self.hand.add(card)
+        self.hand.append(card)
 
     def card_index(self, card: Card) -> int:
         """The index in a player's hand of a particular card."""
-        for i, c in enumerate(self.hand.cards):
+        for i, c in enumerate(self.hand):
             if c.is_same(card):
                 return i
         raise ValueError(f"{card} is not in hand")
@@ -233,8 +207,8 @@ class Player:
         for window_size in window_sizes:
             left = 0
             right = window_size
-            while right <= len(self.hand.cards):
-                move = Move(cards=tuple(self.hand.cards[left:right]), on=on)
+            while right <= len(self.hand):
+                move = Move(cards=tuple(self.hand[left:right]), on=on)
                 if move.is_legal(is_first_move=self.is_first_player):
                     yield move
                 left += 1
@@ -253,7 +227,7 @@ class Player:
                 raise IllegalMoveException(f"Player doesn't have card {card}") from e
             ixs.append(ix)
         for ix in sorted(ixs)[::-1]:
-            self.hand.cards.pop(ix)
+            self.hand.pop(ix)
         if self.is_first_player:
             self.is_first_player = False
         logger.info("%s plays: %s", self, move)
@@ -291,13 +265,13 @@ def deal_to_players(deck: Deck, players: list[Player], hand_size: int) -> None:
     If hand_size is <= 0, deal the whole deck.
     """
     if hand_size <= 0:
-        hand_size = len(deck.cards) + 1
+        hand_size = len(deck) + 1
     cards_dealt_to_each = 0
     while cards_dealt_to_each < hand_size:
         for player in players:
             if not deck:
                 return
-            player.deal(deck.draw())
+            player.deal(deck.pop())
         cards_dealt_to_each += 1
 
 
@@ -321,7 +295,7 @@ class Game:
         for player in self.players:
             player.hand.sort()
             logger.info(player)
-        logger.info("Cards remaining in deck: %s", len(self.deck.cards))
+        logger.info("Cards remaining in deck: %s", len(self.deck))
 
         # Determine first player
         self.active_player_ix = 0
