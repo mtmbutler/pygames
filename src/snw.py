@@ -6,10 +6,13 @@ import random
 import time
 from dataclasses import dataclass
 from enum import Enum
+from itertools import islice
 from typing import Any, Iterator, Optional
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+DIVIDER = "-" * 50
 
 
 class OrderedEnum(Enum):
@@ -62,10 +65,6 @@ class Number(OrderedEnum):
         return self.name[1:]
 
 
-class CardParseError(Exception):
-    """Error in parsing a card from a string."""
-
-
 @dataclass
 class Card:
     """Card."""
@@ -86,25 +85,8 @@ class Card:
         """Whether two cards are the same"""
         return self.number == other.number and self.suit == other.suit
 
-    @classmethod
-    def from_str(cls, s: str) -> "Card":
-        """Try to parse a card from a string like "KS" for king of spades"""
-        try:
-            num, suit = s[:-1], s[-1]
-        except IndexError as e:
-            raise CardParseError(s) from e
-        try:
-            num_obj = getattr(Number, "_" + num.upper())
-        except AttributeError as e:
-            raise CardParseError(f"Couldn't parse card number from '{num}'") from e
-        try:
-            suit_obj = getattr(Suit, suit.upper())
-        except AttributeError as e:
-            raise CardParseError(f"Couldn't parse card suit from '{suit}'") from e
-        return cls(number=num_obj, suit=suit_obj)
 
-
-START_CARD = Card.from_str("3c")
+START_CARD = Card(Number._3, Suit.C)  # pylint: disable=protected-access
 
 
 class CardCollection(list[Card]):
@@ -145,7 +127,7 @@ class Move:
 
     def is_legal(self, is_first_move: bool) -> bool:
         """Whether the move is legal"""
-        if not self.cards:
+        if not self.cards and not is_first_move:
             # Always allowed to pass
             return True
         if is_first_move and not any(c.is_same(START_CARD) for c in self.cards):
@@ -200,6 +182,7 @@ class Player:
     def legal_moves(self, on: tuple[Card, ...]) -> Iterator[Move]:
         """All legal moves"""
         if on:
+            yield Move((), on)  # Can always pass
             window_sizes = [len(on)]
         else:
             window_sizes = [4, 3, 2, 1]
@@ -212,10 +195,9 @@ class Player:
                     yield move
                 left += 1
                 right += 1
-        yield Move((), on)
 
     def play_move(self, move: Move) -> None:
-        """Plays a move and returns the associated card."""
+        """Plays a move"""
         if not move.is_legal(is_first_move=self.is_first_player):
             raise IllegalMoveException(f"Illegal move: {move}")
         ixs: list[int] = []
@@ -233,29 +215,25 @@ class Player:
 
     def play_lowest_card(self, on: tuple[Card, ...]) -> Move:
         """Plays the lowest card that beats the provided card."""
-        for move in self.legal_moves(on=on):
+        for move in islice(self.legal_moves(on=on), 1, None):
             return move
         return Move((), on)
 
     def play_from_input(self, on: tuple[Card, ...]) -> Move:
         """Play a move specified by user input."""
         while True:
-            logger.info("Your turn.\n%s", self.hand)
-            cards_input = input("Play which card? ")
-            if not cards_input or cards_input.lower() == "pass":
-                return Move((), on)
-            card_list: list[Card] = []
-            for card_input in cards_input.split(" "):
-                try:
-                    card_list.append(Card.from_str(card_input))
-                except CardParseError as e:
-                    logger.info("Error parsing card: %s", e)
-                    continue
-            move = Move(tuple(card_list), on)
-            if not move.is_legal(is_first_move=self.is_first_player):
-                logger.info("Illegal move")
+            moves = {str(i): move for i, move in enumerate(self.legal_moves(on=on))}
+            logger.info(
+                "Your turn.\nHand: %s\nAvailable moves:\n  %s",
+                self.hand,
+                "\n  ".join(f"({i}) {move}" for i, move in moves.items()),
+            )
+
+            move_input = input("Play which move? ")
+            if move_input not in moves:
+                logger.info("Invalid input: %s", move_input)
                 continue
-            return move
+            return moves[move_input]
 
 
 def deal_to_players(deck: Deck, players: list[Player], hand_size: int) -> None:
@@ -295,6 +273,7 @@ class Game:
             player.hand.sort()
             logger.info(player)
         logger.info("Cards remaining in deck: %s", len(self.deck))
+        logger.info(DIVIDER)
 
         # Determine first player
         self.active_player_ix = 0
@@ -333,6 +312,7 @@ class Game:
             # Check if the player won
             if not player.hand:
                 logger.info("%s won!", player)
+                logger.info(DIVIDER)
                 logger.info("Final hands:")
                 for p in self.players:
                     logger.info("%s: %s", p, p.hand)
@@ -341,6 +321,7 @@ class Game:
             # Move to the next player
             self.active_player_ix += 1
             if self.active_player_ix >= len(self.players):
+                logger.info(DIVIDER)
                 self.active_player_ix -= len(self.players)
 
 
