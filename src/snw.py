@@ -6,6 +6,7 @@ import random
 import time
 from dataclasses import dataclass
 from enum import Enum
+from functools import cache
 from typing import Any, Iterator, Optional
 
 logger = logging.getLogger(__name__)
@@ -82,6 +83,9 @@ class Card:
 
     def __lt__(self, other: Any) -> Any:
         return self.number < other.number
+
+    def __hash__(self) -> int:
+        return 10 * self.number.value + self.suit.value
 
     def is_same(self, other: Any) -> Any:
         """Whether two cards are the same"""
@@ -171,9 +175,22 @@ class Move:
         on_value = max(c.number for c in self.on)
         return cardinality > on_value
 
+    def is_partial_for_player(self, player: "Player") -> bool:
+        """Whether the move is partial."""
+        hand_counter = player.hand.counter()
+        is_partial = self.count < hand_counter[self.cardinality]
+        logger.debug("Is move %s partial for player %s? %s", self, player, is_partial)
+        return is_partial
+
     def counter(self) -> dict[Number, int]:
         """Card number counter. Example: {Number._5: 3} means three 5's."""
-        return CardCollection(self.cards).counter()
+        return _move_counter(self.cards)
+
+
+@cache
+def _move_counter(cards: tuple[Card, ...]) -> dict[Number, int]:
+    """Card number counter. Example: {Number._5: 3} means three 5's."""
+    return CardCollection(cards).counter()
 
 
 class IllegalMoveException(Exception):
@@ -212,6 +229,11 @@ class Player:
 
     def legal_moves(self, on: tuple[Card, ...]) -> Iterator[Move]:
         """All legal moves"""
+        # A partial move is one where a player doesn't play all their cards of a
+        # given cardinality, e.g. they play two jacks when they have three. These
+        # are usually suboptimal, so let's store them and yield them at the end.
+        partials: list[Move] = []
+
         # Keep track of plays and don't yield redundant moves, e.g. 4c and 4s when
         # we've already yielded 4c and 4h
         redundancy_checker: set[tuple[int, Number]] = set()
@@ -226,12 +248,20 @@ class Player:
             while right <= len(self.hand):
                 move = Move(cards=tuple(self.hand[left:right]), on=on)
                 if move.is_legal(is_first_move=self.is_first_player):
+                    logger.debug("Checking move %s", move)
                     redundancy_class = (move.count, move.cardinality)
                     if redundancy_class not in redundancy_checker:
                         redundancy_checker.add(redundancy_class)
-                        yield move
+                        if move.is_partial_for_player(self):
+                            partials.append(move)
+                        else:
+                            yield move
                 left += 1
                 right += 1
+
+        # Yield the partial moves
+        for move in partials:
+            yield move
 
     def play_move(self, move: Move) -> None:
         """Plays a move"""
@@ -260,12 +290,22 @@ class Player:
     def play_from_input(self, on: tuple[Card, ...]) -> Move:
         """Play a move specified by user input."""
         while True:
-            moves = {str(i): move for i, move in enumerate(self.legal_moves(on=on))}
-            logger.info(
-                "Your turn.\nHand: %s\nAvailable moves:\n  %s",
-                self.hand,
-                "\n  ".join(f"({i}) {move}" for i, move in moves.items()),
-            )
+            partial_index = -1  # The first partial move, so we can mark
+            moves: dict[str, Move] = {}
+            for i, move in enumerate(self.legal_moves(on=on)):
+                if (
+                    partial_index == -1
+                    and move.cards
+                    and move.is_partial_for_player(self)
+                ):
+                    partial_index = i
+                moves[str(i)] = move
+
+            logger.info("Your turn.\nHand: %s\nAvailable moves:", self.hand)
+            for ix, move in moves.items():
+                if ix == str(partial_index):
+                    logger.info("  ---")
+                logger.info("  (%s) %s", ix, move)
 
             move_input = input("Play which move? ")
             if move_input not in moves:
