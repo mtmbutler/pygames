@@ -1,13 +1,12 @@
 """Scumbags and warlords."""
 
+import argparse
 import logging
 import random
 import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Iterator, Optional
-
-from fire import Fire
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -345,12 +344,24 @@ class Game:
                 self.active_player_ix -= len(self.players)
 
 
-def main(num_players: int, human_players: tuple[int, ...] = (0,)) -> None:
-    """Main function."""
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "num_players", type=int, action="store", help="Number of players."
+    )
+    parser.add_argument(
+        "human_players",
+        nargs="*",
+        type=int,
+        action="store",
+        default=[0],
+        help="Which players should be controlled by human input.",
+    )
+    args = parser.parse_args()
 
-    g = Game(num_players, human_players)
+    g = Game(args.num_players, tuple(args.human_players))
     g.start()
 
 
 if __name__ == "__main__":
-    Fire(main)
+    main()
