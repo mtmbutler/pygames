@@ -4,6 +4,7 @@ import argparse
 import logging
 import random
 import time
+from abc import abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from functools import cache
@@ -280,28 +281,32 @@ class Player:
             self.is_first_player = False
         logger.info("%s plays: %s", self, move)
 
-    def play_lowest_card(self, on: tuple[Card, ...]) -> Move:
-        """Plays the lowest card that beats the provided card."""
-        for move in self.legal_moves(on=on):
-            if move:
-                return move
-        return Move((), on)
 
-    def play_from_input(self, on: tuple[Card, ...]) -> Move:
-        """Play a move specified by user input."""
+class Tactic:
+    """An approach to a single move."""
+
+    @abstractmethod
+    def choose_move(self, player: Player, on: tuple[Card, ...]) -> Move:
+        """Choose a move to play."""
+
+
+class PlayFromInput(Tactic):
+    """Play moves from user input. Use this tactic for human players."""
+
+    def choose_move(self, player: Player, on: tuple[Card, ...]) -> Move:
         while True:
             partial_index = -1  # The first partial move, so we can mark
             moves: dict[str, Move] = {}
-            for i, move in enumerate(self.legal_moves(on=on)):
+            for i, move in enumerate(player.legal_moves(on=on)):
                 if (
                     partial_index == -1
                     and move.cards
-                    and move.is_partial_for_player(self)
+                    and move.is_partial_for_player(player)
                 ):
                     partial_index = i
                 moves[str(i)] = move
 
-            logger.info("Your turn.\nHand: %s\nAvailable moves:", self.hand)
+            logger.info("Your turn.\nHand: %s\nAvailable moves:", player.hand)
             for ix, move in moves.items():
                 if ix == str(partial_index):
                     logger.info("  ---")
@@ -312,6 +317,19 @@ class Player:
                 logger.info("Invalid input: %s", move_input)
                 continue
             return moves[move_input]
+
+
+class PlayFirstLegalOption(Tactic):
+    """A simple tactic that plays the first legal move.
+
+    Efficacy is highly dependent on the ordering of legal moves.
+    """
+
+    def choose_move(self, player: Player, on: tuple[Card, ...]) -> Move:
+        for move in player.legal_moves(on=on):
+            if move:
+                return move
+        return Move((), on)
 
 
 def deal_to_players(deck: Deck, players: list[Player], hand_size: int) -> None:
@@ -380,9 +398,9 @@ class Game:
             if len(legal_moves) == 1:
                 move = legal_moves[0]
             elif self.active_player_ix in self.human_players:
-                move = player.play_from_input(last_played_cards)
+                move = PlayFromInput().choose_move(player, last_played_cards)
             else:
-                move = player.play_lowest_card(last_played_cards)
+                move = PlayFirstLegalOption().choose_move(player, last_played_cards)
             player.play_move(move)
             last_played_cards = move.cards or last_played_cards
             last_player_no_pass = player if move else last_player_no_pass
