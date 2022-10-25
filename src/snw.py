@@ -4,11 +4,10 @@ import argparse
 import logging
 import random
 import time
-from abc import abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from functools import cache
-from typing import Any, Iterator, Optional
+from typing import Any, Callable, Iterator, Optional
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -282,54 +281,66 @@ class Player:
         logger.info("%s plays: %s", self, move)
 
 
-class Tactic:
-    """An approach to a single move."""
-
-    @abstractmethod
-    def choose_move(self, player: Player, on: tuple[Card, ...]) -> Move:
-        """Choose a move to play."""
+# A tactic is a function for selecting a move.
+Tactic = Callable[[Player, tuple[Card, ...]], Move]
 
 
-class PlayFromInput(Tactic):
+def play_from_input(player: Player, on: tuple[Card, ...]) -> Move:
     """Play moves from user input. Use this tactic for human players."""
+    while True:
+        partial_index = -1  # The first partial move, so we can mark
+        moves: dict[str, Move] = {}
+        for i, move in enumerate(player.legal_moves(on=on)):
+            if (
+                partial_index == -1
+                and move.cards
+                and move.is_partial_for_player(player)
+            ):
+                partial_index = i
+            moves[str(i)] = move
+        if len(moves) == 1:
+            return moves["0"]
 
-    def choose_move(self, player: Player, on: tuple[Card, ...]) -> Move:
-        while True:
-            partial_index = -1  # The first partial move, so we can mark
-            moves: dict[str, Move] = {}
-            for i, move in enumerate(player.legal_moves(on=on)):
-                if (
-                    partial_index == -1
-                    and move.cards
-                    and move.is_partial_for_player(player)
-                ):
-                    partial_index = i
-                moves[str(i)] = move
+        logger.info("Your turn.\nHand: %s\nAvailable moves:", player.hand)
+        for ix, move in moves.items():
+            if ix == str(partial_index):
+                logger.info("  ---")
+            logger.info("  (%s) %s", ix, move)
 
-            logger.info("Your turn.\nHand: %s\nAvailable moves:", player.hand)
-            for ix, move in moves.items():
-                if ix == str(partial_index):
-                    logger.info("  ---")
-                logger.info("  (%s) %s", ix, move)
-
-            move_input = input("Play which move? ")
-            if move_input not in moves:
-                logger.info("Invalid input: %s", move_input)
-                continue
-            return moves[move_input]
+        move_input = input("Play which move? ")
+        if move_input not in moves:
+            logger.info("Invalid input: %s", move_input)
+            continue
+        return moves[move_input]
 
 
-class PlayFirstLegalOption(Tactic):
+def play_first_legal_option(player: Player, on: tuple[Card, ...]) -> Move:
     """A simple tactic that plays the first legal move.
 
     Efficacy is highly dependent on the ordering of legal moves.
     """
+    for move in player.legal_moves(on=on):
+        if move:
+            return move
+    return Move((), on)
 
-    def choose_move(self, player: Player, on: tuple[Card, ...]) -> Move:
-        for move in player.legal_moves(on=on):
-            if move:
-                return move
-        return Move((), on)
+
+class Strategy:
+    """A strategy for choosing moves for a whole game."""
+
+    def __init__(self, tactics: list[tuple[Tactic, float]]):
+        self.tactics = [t for t, _ in tactics]
+        self.weights = [w for _, w in tactics]
+
+    def choose_tactic(self) -> Tactic:
+        """Select a tactic for a given turn"""
+        return random.choices(self.tactics, weights=self.weights)[0]
+
+
+STRATEGIES = {
+    "human": Strategy([(play_from_input, 1)]),
+    "cpu": Strategy([(play_first_legal_option, 1)]),
+}
 
 
 def deal_to_players(deck: Deck, players: list[Player], hand_size: int) -> None:
@@ -395,12 +406,12 @@ class Game:
             legal_moves = list(player.legal_moves(on=last_played_cards))
             if not legal_moves:
                 raise Exception(f"{player} has no legal moves")
-            if len(legal_moves) == 1:
-                move = legal_moves[0]
-            elif self.active_player_ix in self.human_players:
-                move = PlayFromInput().choose_move(player, last_played_cards)
+            if self.active_player_ix in self.human_players:
+                tactic = STRATEGIES["human"].choose_tactic()
             else:
-                move = PlayFirstLegalOption().choose_move(player, last_played_cards)
+                tactic = STRATEGIES["cpu"].choose_tactic()
+            logger.debug("Chose tactic `%s` for player %s", tactic, player)
+            move = tactic(player, last_played_cards)
             player.play_move(move)
             last_played_cards = move.cards or last_played_cards
             last_player_no_pass = player if move else last_player_no_pass
