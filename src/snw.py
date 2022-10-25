@@ -6,7 +6,6 @@ import random
 import time
 from dataclasses import dataclass
 from enum import Enum
-from itertools import islice
 from typing import Any, Iterator, Optional
 
 logger = logging.getLogger(__name__)
@@ -215,8 +214,9 @@ class Player:
 
     def play_lowest_card(self, on: tuple[Card, ...]) -> Move:
         """Plays the lowest card that beats the provided card."""
-        for move in islice(self.legal_moves(on=on), 1, None):
-            return move
+        for move in self.legal_moves(on=on):
+            if move:
+                return move
         return Move((), on)
 
     def play_from_input(self, on: tuple[Card, ...]) -> Move:
