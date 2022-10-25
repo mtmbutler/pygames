@@ -345,6 +345,7 @@ class Game:
 
 
 def main() -> None:
+    """Main"""
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "num_players", type=int, action="store", help="Number of players."
