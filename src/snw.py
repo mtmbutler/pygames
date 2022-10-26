@@ -24,6 +24,9 @@ class OrderedEnum(Enum):
     def __lt__(self, other: Any) -> Any:
         return self.value < other.value
 
+    def __le__(self, other: Any) -> Any:
+        return self.value <= other.value
+
 
 class Suit(OrderedEnum):
     """Card suit."""
@@ -326,6 +329,37 @@ def play_first_legal_option(player: Player, on: tuple[Card, ...]) -> Move:
     return Move((), on)
 
 
+def maintain_balance(player: Player, on: tuple[Card, ...]) -> Move:
+    """Play first legal, but pass to hold onto high cards.
+
+    This is called maintain balance because the idea is to keep the number of low
+    cards in one's hand roughly equal to the number of high cards.
+    """
+    middle_val = Number._9  # pylint: disable=protected-access
+    num_low_cards = 0
+    for card in player.hand:
+        if card.number <= middle_val:
+            num_low_cards += 1
+    do_hold = num_low_cards >= len(player.hand) // 2
+    logger.debug("Player %s has %s low cards, hold=%s", player, num_low_cards, do_hold)
+    hold_override_move: Optional[Move] = None
+    for move in player.legal_moves(on=on):
+        if move:
+            if not do_hold or (move.cardinality <= middle_val):
+                return move
+            if hold_override_move is None:
+                logger.debug(
+                    "Player %s hold override move: %s", player, hold_override_move
+                )
+                hold_override_move = move
+    if not on and hold_override_move:
+        logger.debug(
+            "Player %s playing hold override move: %s", player, hold_override_move
+        )
+        return hold_override_move
+    return Move((), on)
+
+
 class Strategy:
     """A strategy for choosing moves for a whole game."""
 
@@ -340,7 +374,7 @@ class Strategy:
 
 STRATEGIES = {
     "human": Strategy([(play_from_input, 1)]),
-    "cpu": Strategy([(play_first_legal_option, 1)]),
+    "cpu": Strategy([(maintain_balance, 2), (play_first_legal_option, 1)]),
 }
 
 
@@ -413,7 +447,7 @@ class Game:
             if not legal_moves:
                 raise Exception(f"{player} has no legal moves")
             tactic = player.strategy.choose_tactic()
-            logger.debug("Chose tactic `%s` for player %s", tactic, player)
+            logger.debug("Chose tactic `%s` for player %s", tactic.__name__, player)
             move = tactic(player, last_played_cards)
             player.play_move(move)
             last_played_cards = move.cards or last_played_cards
