@@ -203,6 +203,7 @@ class Player:
 
     idno: int
     hand: CardCollection
+    strategy: "Strategy"
     is_first_player: bool = False
 
     def __str__(self) -> str:
@@ -364,7 +365,6 @@ class Game:
 
     def __init__(self, num_players: int, human_players: tuple[int, ...] = (0,)):
         self.num_players = num_players
-        self.human_players = human_players
 
         # Make deck
         self.deck = Deck.full_shuffled_deck()
@@ -373,7 +373,13 @@ class Game:
         # Make players and deal cards
         self.players: list[Player] = []
         for i in range(num_players):
-            self.players.append(Player(idno=i + 1, hand=CardCollection([])))
+            if i in human_players:
+                strategy = STRATEGIES["human"]
+            else:
+                strategy = STRATEGIES["cpu"]
+            self.players.append(
+                Player(idno=i + 1, hand=CardCollection([]), strategy=strategy)
+            )
         deal_to_players(self.deck, self.players, -1)
         logger.info("Cards dealt.")
         for player in self.players:
@@ -406,10 +412,7 @@ class Game:
             legal_moves = list(player.legal_moves(on=last_played_cards))
             if not legal_moves:
                 raise Exception(f"{player} has no legal moves")
-            if self.active_player_ix in self.human_players:
-                tactic = STRATEGIES["human"].choose_tactic()
-            else:
-                tactic = STRATEGIES["cpu"].choose_tactic()
+            tactic = player.strategy.choose_tactic()
             logger.debug("Chose tactic `%s` for player %s", tactic, player)
             move = tactic(player, last_played_cards)
             player.play_move(move)
