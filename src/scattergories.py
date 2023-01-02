@@ -1,11 +1,10 @@
 """Scattergories"""
 
+import datetime
 import random
 import time
+import timeit
 from pathlib import Path
-
-from fire import Fire
-from tqdm import tqdm
 
 PROMPTS_PATH = Path(__file__).parent / "scattergories.txt"
 LETTERS = "ABCDEFGHIJKLMNOPRSTW"
@@ -35,8 +34,13 @@ def main() -> None:
             print(f"  {i + 1}.\t{prompts.pop()}")
         print("")
         try:
-            for _ in tqdm(range(SECONDS_PER_ROUND)):
-                time.sleep(1)
+            start = current = timeit.default_timer()
+            target = start + SECONDS_PER_ROUND
+            while current < target:
+                delta = int(target - current)
+                print(f"\rRemaining time: {delta // 60}m{delta % 60}s", end="")
+                time.sleep(0.1)
+                current = timeit.default_timer()
             print("Time's up!")
         except KeyboardInterrupt:
             print("Round canceled.")
@@ -45,4 +49,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    Fire(main)
+    main()
