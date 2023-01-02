@@ -20,7 +20,7 @@ def main() -> None:
 
     # Set up letters and prompts
     with open(PROMPTS_PATH, encoding="utf-8") as f:
-        prompts = [ln.strip() for ln in f.readlines()]
+        prompts = [ln.title() for ln in set(ln.strip().lower() for ln in f.readlines())]
     letters = list(LETTERS)
     random.shuffle(prompts)
     random.shuffle(letters)
@@ -32,7 +32,7 @@ def main() -> None:
         print(f"Letter: {letter}")
         print("Prompts:")
         for i in range(NUM_PROMPTS):
-            print(f"  {i + 1}. {prompts.pop()}")
+            print(f"  {i + 1}.\t{prompts.pop()}")
         print("")
         try:
             for _ in tqdm(range(SECONDS_PER_ROUND)):
