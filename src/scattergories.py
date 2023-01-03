@@ -1,6 +1,5 @@
 """Scattergories"""
 
-import datetime
 import random
 import time
 import timeit
